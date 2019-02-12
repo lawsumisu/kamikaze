@@ -74,6 +74,10 @@ namespace ListUtilities{
             get { return Mathf.Min(windowIndex, size); }
         }
 
+        public int MaxSize {
+            get { return size; }
+        }
+
         public void Fill(T item) {
             for (int i = 0; i < size; i++) {
                 Add(item);

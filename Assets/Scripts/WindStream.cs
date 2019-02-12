@@ -5,6 +5,12 @@ using ListUtilities;
 
 public class WindStream : MonoBehaviour {
 
+    /// <summary>
+    /// A data structure that contains relevant information about the effects of the wind stream on a particle at a specified location. 
+    /// Info.axis describes the direction of the wind stream.
+    /// Info.force describes the spring force of a particle.
+    /// Info.projection and Info.rejection are vectors that are collinear and perpendicular to the axis respectively.
+    /// </summary>
     class WindStreamForceFieldInfo {
         public static WindStreamForceFieldInfo ZERO = new WindStreamForceFieldInfo(Vector3.zero, Vector3.zero, Vector3.zero, Vector3.zero);
         private Vector3 _projection, _rejection, _axis, _force;
@@ -33,30 +39,41 @@ public class WindStream : MonoBehaviour {
         }
     }
 
-    // these lists are used to contain the particles which match
-    // the trigger conditions each frame.
+    // Inspector Properties
     public ParticleSystem ps;
-    ParticleSystem.Particle[] particles;
-    float minRadius = .5f;
-    float maxRadius = 3.0f;
-    float k = 30;
+    public GameObject windZone;
     public float speed = 3;
     public float angularSpeed = 200;
+
+    // Properties
+    private ParticleSystem.Particle[] particles;
+    private float minRadius = .5f;
+    private float maxRadius = 3.0f;
+    private float k = 30;                   // Spring constant: Affects how tightly the leaves will be attracted to the center of the wind path
+    private float particleRadius = .25f;
     private WindowArray<Vector3> points;
     private bool isDebug = false;
     private float startSpeed;
+    private GameObject[] windZones;
+    private Transform cameraTransform;
 
     void Start() {
         points = new WindowArray<Vector3>(50);
         startSpeed = speed;
+        windZones = new GameObject[5];
+        for (int i = 0; i < windZones.Length; ++i) {
+            GameObject go = Instantiate(windZone);
+            go.transform.parent = transform;
+            windZones[i] = go;
+        }
+        cameraTransform = GetComponentInChildren<Camera>().transform;
     }
 
     void Update() {
         UpdateInput();
-        int N = points.Length;
-        if (N == 0 || (points[N - 1] - transform.position).magnitude > .1f) {
-            points.Add(transform.position);
-        }
+        UpdateWindZones();
+        UpdateCamera();
+        UpdatePoints();
         if (isDebug) DrawPath();
     }
 
@@ -65,10 +82,11 @@ public class WindStream : MonoBehaviour {
         int particleCount = ps.GetParticles(particles);
 
         // Change only the particles that are alive
+        int count = 0;
         for (int i = 0; i < particleCount; i++) {
             // Apply forces to particles when they intersect colliders
 
-            // Calculate velocity change with RK2 in order to have a higher-order bound on the error caused by the spring forces
+            // Calculate velocity change with RK2 in order to have a higher-order bound on the error caused by the spring forces.
             Vector3 q = particles[i].position;
             Vector3 v = particles[i].velocity;
             float dt = Time.deltaTime / 2;
@@ -77,19 +95,46 @@ public class WindStream : MonoBehaviour {
             q += v * dt;
 
             WindStreamForceFieldInfo FFI = CalculateForceFieldInfo(q);
-            v += FFI.force * dt;
-            particles[i].velocity = v;
+            if (FFI.force != Vector3.zero) {
+                v += FFI.force * dt;
+                particles[i].velocity = v;
 
-            Vector3 rotatedRejection = Quaternion.AngleAxis(10, FFI.projection) * FFI.rejection;
-            Vector3 newPosition = particles[i].position - FFI.rejection + rotatedRejection;
-            particles[i].position = newPosition + FFI.axis;
-            particles[i].remainingLifetime += Time.deltaTime;
+                Vector3 rotatedRejection = Quaternion.AngleAxis(10, FFI.projection) * FFI.rejection;
+                Vector3 newPosition = particles[i].position - FFI.rejection + rotatedRejection;
+                particles[i].position = newPosition + FFI.axis;
+                particles[i].remainingLifetime += Mathf.Min(particles[i].remainingLifetime + Time.deltaTime, 1);
+                count++;
+            }  
         }
 
         // Apply the particle changes to the Particle System
         ps.SetParticles(particles, particleCount);
+
+        Debug.Log(count);
     }
 
+    void UpdatePoints() {
+        int N = points.Length;
+        if (N == 0 || (points[N - 1] - transform.position).magnitude > .1f) {
+            points.Add(transform.position);
+        }
+    }
+
+    void UpdateWindZones() {
+        int M = points.MaxSize / windZones.Length;
+        for (int i = 0; i < points.Length; ++i) {
+            if (i % M == 0) {
+                int j = i / M;
+                windZones[j].transform.position = points[i];
+            }
+        }
+    }
+
+    /// <summary>
+    /// Calculates the wind stream's force field info for a particle located at particlePosition.
+    /// </summary>
+    /// <param name="particlePosition"></param>
+    /// <returns></returns>
     WindStreamForceFieldInfo CalculateForceFieldInfo(Vector3 particlePosition) {
         float radialMultiplier = speed / startSpeed;
         for (int j = points.Length - 1; j > 0; --j) {
@@ -98,7 +143,7 @@ public class WindStream : MonoBehaviour {
             Vector3 p2 = points[k1];
             float r1 = Mathf.Lerp(minRadius * radialMultiplier, maxRadius * radialMultiplier, (points.Length - k1 - 1 ) / (points.Length - 1.0f));
             float r2 = Mathf.Lerp(minRadius * radialMultiplier, maxRadius * radialMultiplier, (points.Length - k0 - 1) / (points.Length - 1.0f));
-            if (IsPointInCone(particlePosition, p1, p2, r1, r2)) {
+            if (IsPointInCone(particlePosition, particleRadius, p1, p2, r1, r2)) {
                 Vector3 a = particlePosition - p1;
                 Vector3 b = p2 - p1;
                 Vector3[] projectionData = GetProjection(a, b);
@@ -111,6 +156,10 @@ public class WindStream : MonoBehaviour {
     }
 
     void UpdateInput() {
+        // Rotate wind based on which keys are pressed.
+
+        // Down and Up rotate around the x-axis.
+        // Left and Right rotate around the y-axis.
         Vector2 direction = Vector2.zero;
         if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) {
             direction += Vector2.down;
@@ -124,7 +173,15 @@ public class WindStream : MonoBehaviour {
             direction += Vector2.left;
         }
         direction *= Time.deltaTime * angularSpeed;
-        transform.eulerAngles = new Vector3(transform.eulerAngles.x + direction.x, transform.eulerAngles.y + direction.y, 0);
+
+        // Need to make sure that eulerAngles.x is either [0 - 90] or [270 - 360]
+        float x = (transform.eulerAngles.x + direction.x);
+        if (transform.eulerAngles.x >= 270 && x < 270) {
+            x = 270;
+        } else if (x > 90 && x < 270) {
+            x = 90;
+        }
+        transform.eulerAngles = new Vector3(x, transform.eulerAngles.y + direction.y, 0);
         transform.Translate(Vector3.forward * speed * Time.deltaTime);
 
         if (Input.GetKeyDown(KeyCode.Q)) {
@@ -137,19 +194,38 @@ public class WindStream : MonoBehaviour {
         }
     }
 
-    bool IsPointInCylinder(Vector3 q, Vector3 p1, Vector3 p2, float r) {
-        return IsPointInCone(q, p1, p2, r, r);
+    void UpdateCamera() {
+        // Want camera to follow behind wind, but have it scale linearly with speed.
+        float m = -5 / startSpeed;  // calculated such that if speed == 2 * startSpeed, the camera will be at z = -15.
+        float z = m * (speed - startSpeed) - 10;
+        Vector3 v = cameraTransform.localPosition;
+        cameraTransform.localPosition = new Vector3(v.x, v.y, z);
     }
 
-    bool IsPointInCone(Vector3 q, Vector3 p1, Vector3 p2, float r1, float r2) {
+    /// <summary>
+    /// Checks if a particle located at q with radius particleRadius intersects with a conic section with an axis defined by Vector p2 - p1 and end caps
+    /// of radius r1 and r2.
+    /// </summary>
+    /// <param name="q"></param>
+    /// <param name="particleRadius"></param>
+    /// <param name="p1"></param>
+    /// <param name="p2"></param>
+    /// <param name="r1"></param>
+    /// <param name="r2"></param>
+    /// <returns></returns>
+    bool IsPointInCone(Vector3 q, float particleRadius, Vector3 p1, Vector3 p2, float r1, float r2) {
         Vector3 axis = p2 - p1;
+        // Check if particle is between the two planes formed by the lids of the conic section.
         if (Vector3.Dot(q - p1, axis) >= 0 && Vector3.Dot(q - p2, axis) <= 0) {
+            // Project the point onto the line and measure the rejection against the radius of the circular cross-section
+            // of the cone where the center of the circle is located where the projection's headpoint is.
             Vector3[] projectionData = GetProjection(q - p1, axis);
             Vector3 projection = projectionData[0];
             float t = projection.magnitude / axis.magnitude;
             float r = Mathf.Lerp(r1, r2, t);
             Vector3 rejection = projectionData[1];
-            return rejection.magnitude <= r;
+            // If the rejection's length is less than the cross-section's radius (+ the particle's radius), then it is within the cone.
+            return rejection.magnitude <= r + particleRadius;
         }
         else return false;
     }
@@ -175,6 +251,7 @@ public class WindStream : MonoBehaviour {
             Debug.DrawLine(p1, p2, Color.cyan);
         }
     }
+
     void DrawCircle(Vector3 center, Vector3 axis, float radius, Color color) {
         Vector3 normal = axis.normalized;
         Vector3 orthoAxis = new Vector3(normal.z, 0, -normal.x).normalized;
@@ -188,6 +265,14 @@ public class WindStream : MonoBehaviour {
         }
     }
 
+    /// <summary>
+    /// Projects a vector A onto a vector B.
+    /// Returns a 2-element array output where output[0] is the projection of A onto B, and output[1] is the rejection of A onto B.
+    /// (projection_A + rejection_A = A)
+    /// </summary>
+    /// <param name="a"></param>
+    /// <param name="b"></param>
+    /// <returns></returns>
     Vector3[] GetProjection(Vector3 a, Vector3 b) {
         Vector3 projection = Vector3.Dot(a, b) / b.sqrMagnitude * b;
         Vector3 rejection = a - projection;
