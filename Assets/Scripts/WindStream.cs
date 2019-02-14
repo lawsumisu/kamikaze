@@ -54,7 +54,7 @@ public class WindStream : MonoBehaviour {
     private WindowArray<Vector3> points;
     private bool isDebug = false;
     private float startSpeed;
-    private GameObject[] windZones;
+    private GameObject[] windZones;         // Spherical Wind Zones that are evenly dispersed throughout the path the wind travels
     private Transform cameraTransform;
 
     void Start() {
@@ -81,7 +81,6 @@ public class WindStream : MonoBehaviour {
         InitializeParticleSystem();
         int particleCount = ps.GetParticles(particles);
 
-        // Change only the particles that are alive
         int count = 0;
         for (int i = 0; i < particleCount; i++) {
             // Apply forces to particles when they intersect colliders
@@ -206,13 +205,6 @@ public class WindStream : MonoBehaviour {
     /// Checks if a particle located at q with radius particleRadius intersects with a conic section with an axis defined by Vector p2 - p1 and end caps
     /// of radius r1 and r2.
     /// </summary>
-    /// <param name="q"></param>
-    /// <param name="particleRadius"></param>
-    /// <param name="p1"></param>
-    /// <param name="p2"></param>
-    /// <param name="r1"></param>
-    /// <param name="r2"></param>
-    /// <returns></returns>
     bool IsPointInCone(Vector3 q, float particleRadius, Vector3 p1, Vector3 p2, float r1, float r2) {
         Vector3 axis = p2 - p1;
         // Check if particle is between the two planes formed by the lids of the conic section.

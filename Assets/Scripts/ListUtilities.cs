@@ -7,8 +7,8 @@ namespace ListUtilities{
     /// A Data Structure designed for maintaining a set number of elements in the order that they are added.
     /// When the n+1th element is added to a list of size n, the "window" of accessible elements is shifted
     /// by 1, resulting in the removal of the 1st element. This window-shift occurs in O(1) time.
-    /// This also means that (for a full array) the least recently added element is always at index
-    /// "0" and the most recently added element is always at index "size-1".
+    /// This also means that the least recently added element is always at index
+    /// "0" and the most recently added element is always at index "Length-1".
     /// </summary>
     public class WindowArray<T> {
         private T[] array;
