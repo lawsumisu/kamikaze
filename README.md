@@ -2,6 +2,10 @@
 
 Control a gust of wind and try to pick up as many leaves as you can!
 
+## How To Start
+1. Clone this repo and open the project with Unity 2017 (or higher)
+1. Open Scene 1 and press Play in the Scene Editor
+
 ## Controls
 * `Space`: Increase wind speed
     * As the wind's speed increases, it can pull leaves in that are farther away
