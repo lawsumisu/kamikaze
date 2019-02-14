@@ -1,16 +1,15 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
-public class Controller : MonoBehaviour {
+/// <summary>
+/// Simple script for generating a random assortment of trees based on the scale of the attaching object.
+/// </summary>
+public class TreeSpawner : MonoBehaviour {
 
     public GameObject treePrefab;
-
-
-	// Use this for initialization
+    public int rows = 5;
+    public int columns = 3;
+ 
 	void Start () {
-        int rows = 5;
-        int columns = 3;
         Vector3 scale = transform.localScale;
         int count = 0;
 		for (float i = -scale.x / 2; i <= scale.x / 2; i += scale.x / (rows - 1)) {
@@ -20,13 +19,7 @@ public class Controller : MonoBehaviour {
                 GameObject go = Instantiate(treePrefab);
                 go.name = string.Format("Tree #{0}", ++count);
                 go.transform.position = new Vector3(x, 0, z);
-            }
-            
+            }        
         }
-	}
-	
-	// Update is called once per frame
-	void Update () {
-		
 	}
 }
